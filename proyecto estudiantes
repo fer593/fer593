@@ -1,0 +1,166 @@
+import psycopg2
+
+class GestionAcademica:
+    def __init__(self):
+        self.conexion = psycopg2.connect(
+            dbname="PROYECTO_SISTEMA_ESTUDIANTES",
+            user="postgres",
+            password="Fernando",
+            host="localhost",
+            port="5432"
+        )
+        self.cursor = self.conexion.cursor() # cursor abrir la base datos  
+        self._crear_tablas()
+
+    def _crear_tablas(self):
+        try: #cilco que va verficar en la base de datos o recorre la base de datos 
+            # Crear las tablas en PostgreSQL
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS estudiantes (
+                    id SERIAL PRIMARY KEY,
+                    nombre TEXT,
+                    carnet TEXT UNIQUE
+                )
+            ''')
+            
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS cursos (
+                    id SERIAL PRIMARY KEY,
+                    codigo TEXT UNIQUE,
+                    nombre TEXT
+                )
+            ''')
+            
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS notas (
+                    id SERIAL PRIMARY KEY,
+                    estudiante_id INTEGER,
+                    curso_id INTEGER,
+                    primer_parcial REAL,
+                    segundo_parcial REAL,
+                    examen_final REAL,
+                    FOREIGN KEY (estudiante_id) REFERENCES estudiantes (id),
+                    FOREIGN KEY (curso_id) REFERENCES cursos (id)
+                )
+            ''')
+            self.conexion.commit()
+            print("Tablas creadas o verificadas correctamente.")  # este mensaje me di9ce  que las tablas y los campos feuraon creados con exito 
+        except Exception as e:
+            print(f"Error al crear tablas: {e}")   # medice que hubo un error a la hora de crear los  tablas 
+
+    def crear_estudiante(self, nombre, carnet):
+        try:
+            self.cursor.execute("INSERT INTO estudiantes (nombre, carnet) VALUES (%s, %s)", (nombre, carnet))
+            self.conexion.commit()
+            print("Estudiante registrado con éxito.")
+        except Exception as e:
+            print(f"Error al registrar estudiante: {e}")
+
+    def crear_curso(self, codigo, nombre):
+        try:
+            self.cursor.execute("INSERT INTO cursos (codigo, nombre) VALUES (%s, %s)", (codigo, nombre))
+            self.conexion.commit()
+            print("Curso registrado con éxito.")
+        except Exception as e:
+            print(f"Error al registrar curso: {e}")
+
+    def registrar_notas(self, carnet, codigo_curso, primer_parcial, segundo_parcial, examen_final):
+        try:
+            self.cursor.execute("SELECT id FROM estudiantes WHERE carnet = %s", (carnet,))
+            estudiante_id = self.cursor.fetchone()
+            print(f"Estudiante ID: {estudiante_id}")
+            self.cursor.execute("SELECT id FROM cursos WHERE codigo = %s", (codigo_curso,))
+            curso_id = self.cursor.fetchone()
+            print(f"Curso ID: {curso_id}")
+
+            if estudiante_id and curso_id:
+                self.cursor.execute(
+                    "INSERT INTO notas (estudiante_id, curso_id, primer_parcial, segundo_parcial, examen_final) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (estudiante_id[0], curso_id[0], primer_parcial, segundo_parcial, examen_final)
+                )
+                self.conexion.commit()
+                print("Notas registradas con éxito.")
+            else:
+                print("Estudiante o curso no encontrado.")
+        except Exception as e:
+            print(f"Error al registrar notas: {e}")
+
+    def buscar_estudiante(self, nombre=None, carnet=None):
+        try:
+            query = "SELECT * FROM estudiantes WHERE nombre = %s OR carnet = %s"
+            self.cursor.execute(query, (nombre, carnet))
+            estudiantes = self.cursor.fetchall()
+            for estudiante in estudiantes:
+                print(estudiante)
+        except Exception as e:
+            print(f"Error en la búsqueda: {e}")
+
+    def reporte_mejores_peores(self):
+        try:
+            query = """
+            SELECT e.nombre, c.nombre AS curso, 
+            (n.primer_parcial + n.segundo_parcial + n.examen_final) / 3 AS promedio
+            FROM notas n
+            JOIN estudiantes e ON e.id = n.estudiante_id
+            JOIN cursos c ON c.id = n.curso_id
+            ORDER BY promedio DESC
+            LIMIT 5;
+            """
+            self.cursor.execute(query)
+            reporte = self.cursor.fetchall()
+            print("Mejores estudiantes:")
+            for fila in reporte:
+                print(fila)
+        except Exception as e:
+            print(f"Error al generar el reporte: {e}")
+
+    def cerrar_conexion(self):
+        self.cursor.close()
+        self.conexion.close()
+
+def mostrar_menu():
+    print("\n--- Menú de Gestión Académica ---")
+    print("1. Crear estudiante")
+    print("2. Crear curso")
+    print("3. Registrar notas")
+    print("4. Buscar estudiante")
+    print("5. Generar reporte de mejores estudiantes")
+    print("6. Salir")
+
+def ejecutar_opcion(opcion, app):
+    if opcion == 1:
+        nombre = input("Ingrese el nombre del estudiante: ")
+        carnet = input("Ingrese el carnet del estudiante: ")
+        app.crear_estudiante(nombre, carnet)
+    elif opcion == 2:
+        codigo = input("Ingrese el código del curso: ")
+        nombre = input("Ingrese el nombre del curso: ")
+        app.crear_curso(codigo, nombre)
+    elif opcion == 3:
+        carnet = input("Ingrese el carnet del estudiante: ")
+        codigo_curso = input("Ingrese el código del curso: ")
+        primer_parcial = float(input("Ingrese la nota del primer parcial: "))
+        segundo_parcial = float(input("Ingrese la nota del segundo parcial: "))
+        examen_final = float(input("Ingrese la nota del examen final: "))
+        app.registrar_notas(carnet, codigo_curso, primer_parcial, segundo_parcial, examen_final)
+    elif opcion == 4:
+        nombre = input("Ingrese el nombre del estudiante (o deje en blanco): ")
+        carnet = input("Ingrese el carnet del estudiante (o deje en blanco): ")
+        app.buscar_estudiante(nombre if nombre else None, carnet if carnet else None)
+    elif opcion == 5:
+        app.reporte_mejores_peores()
+    elif opcion == 6:
+        print("Cerrando aplicación...")
+        app.cerrar_conexion()
+        exit()
+    else:
+        print("Opción inválida, por favor seleccione una opción del menú.")
+
+# Ejecución del programa
+if __name__ == "__main__":
+    app = GestionAcademica()
+    while True:
+        mostrar_menu()
+        opcion = int(input("Seleccione una opción: "))
+        ejecutar_opcion(opcion, app)
